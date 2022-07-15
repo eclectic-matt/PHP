@@ -1,0 +1,223 @@
+<!DOCTYPE html><html>
+<head>
+	<title>Swears</title>
+	<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+</head>
+
+<body class='w3-dark-grey'>
+
+<main id='main'>
+
+<style>
+
+button {
+	float: none;
+	font-size: 3em;
+	}
+
+div#cards {
+	float:none;
+	margin: 0 auto;
+	position: relative;
+	width: 100%;
+	height: 80%;
+	}
+
+div#box-one, div#box-two {
+    width: 48%;
+    height: 200%;
+	min-width: 100px;
+	min-height: 200px;
+    position: relative;
+	float: left;
+	margin: 0 1%;
+	border-style: solid;
+	border-color: black;
+	border-radius: 1px 5px 1px 5px;
+}
+
+
+
+div#box-one {
+	background-color: #5e25a1;
+	animation-name: flip-one;
+	animation-iteration: 1;
+	animation-duration: 9s; 	// Must be the same as the content anim!
+}
+
+div#box-two {
+	background-color: #135513;
+	animation-name: flip-two;
+	animation-iteration: 1;
+	animation-duration: 9s; 	// Must be the same as the content anim!
+}
+
+div#txt-one, div#txt-two {
+	text-align: center;
+	margin: 0 auto;
+	top: 25%;
+	position: relative;
+	font-size: 2em;	// Keep the same as in the animation!
+	color: white !important;
+}
+
+
+div#txt-one:after {
+	top:0%;
+	content: attr(data-content);
+	animation-iteration: 1;
+	animation-name: addWord;
+	animation-duration: 9s;		// Must be the same as the flipping anim!
+}
+
+div#txt-two:after {
+	top:0%;
+	content: attr(data-content);
+	animation-iteration: 1;
+	animation-name: addWord;
+	animation-duration: 9s;		// Must be the same as the flipping anim!
+}
+
+/* This applies to box one */
+@keyframes flip-one {
+    0% {transform: rotateX(-180deg);background-color: black;}
+    15% {background-color: black;}
+	40% {background-color: #5e25a1;}
+	65% {transform: rotateX(0deg);background-color: #5e25a1;}
+    90% {transform: rotateX(0deg); background-color: #5e25a1;}
+}
+
+/* This applies to box two */
+@keyframes flip-two {
+    0% {transform: rotateX(-180deg);background-color: black;}
+    25% {background-color: black;}
+	45% {background-color: #135513;}
+	75% {transform: rotateX(0deg); background-color: #135513;}
+    100% {transform: rotateX(0deg); background-color: #135513;}
+}
+
+/* This applies to the INNER text */
+@keyframes addWord {
+    0% {
+		font-size: 1px;
+		color:black;
+		top:100%;
+	}
+	25% {
+		font-size: 1em;
+		color: red!important;
+		top: 40%;
+		content: attr(data-content);
+	}
+	75%{
+		font-size: 1em;
+		color: red!important;
+		top:0%;
+		content: attr(data-content);
+	}
+}
+</style>
+<script type='text/javascript' src='/swear/swears.js'></script>
+
+<script type='text/javascript'>
+
+
+	var fullSwear = '';
+	function updateTitle(swear){
+
+		//https://stackoverflow.com/a/38410767
+		document.getElementsByTagName('title')[0].innerHTML = 'You are a ' + swear;
+		console.log('Title updated to ' + swear);
+		var allMetaElements = document.getElementsByTagName('meta');
+		for (var i=0; i<allMetaElements.length; i++) {
+			if (allMetaElements[i].getAttribute('property') == 'og:title') {
+				allMetaElements[i].setAttribute('content', 'You are a ' + swear);
+				console.log('og:title updated to ' + swear);
+				break;
+			}
+		}
+
+	}
+
+	function newSwear(){
+
+		// Calls both flipLeft and flipRight plus updates title meta info
+		updateTitle(flipLeft() + ' ' + flipRight());
+
+			//https://css-tricks.com/restart-css-animation/
+			//flipLeft();
+			//flipRight();
+			//var totalSwear = flipLeft() + ' ' + flipRight();
+			//console.log('Swear = ' + totalSwear);
+	}
+
+		function flipLeft(){
+
+			var boxElem = document.getElementById('box-one');
+			var newElem = boxElem.cloneNode(true);
+			boxElem.parentNode.replaceChild(newElem,boxElem);
+
+			var txtElemOne = document.getElementById('txt-one');
+			var thisSwear = swears[0][Math.floor(Math.random() * swears[0].length)];
+			txtElemOne.setAttribute('data-content',thisSwear);
+			var newElemOne = txtElemOne.cloneNode(true);
+			newElemOne.classList.remove('show-word');
+			txtElemOne.parentNode.replaceChild(newElemOne,txtElemOne);
+
+			// To match up to other half of swear
+			var rightSwear = document.getElementById('txt-two').getAttribute('data-content');
+			fullSwear = thisSwear + ' ' + rightSwear;
+			updateTitle(fullSwear);
+
+			return thisSwear;
+			
+		}
+
+		function flipRight(){
+
+			var boxElem = document.getElementById('box-two');
+			var newElem = boxElem.cloneNode(true);
+			boxElem.parentNode.replaceChild(newElem,boxElem);
+
+			var txtElemTwo = document.getElementById('txt-two');
+			var thisSwear = swears[1][Math.floor(Math.random() * swears[1].length)];
+			txtElemTwo.setAttribute('data-content',thisSwear);
+			var newElemTwo = txtElemTwo.cloneNode(true);
+			newElemTwo.classList.remove('show-word');
+			txtElemTwo.parentNode.replaceChild(newElemTwo,txtElemTwo);
+
+			// To match up to other half of swear
+			var leftSwear = document.getElementById('txt-one').getAttribute('data-content');
+			fullSwear = leftSwear + ' ' +  thisSwear;
+			updateTitle(fullSwear);
+
+			return thisSwear;
+
+		}
+</script>
+
+</head>
+<body onload='newSwear()'>
+
+<div class='w3-container'>
+	<h1>Swear Cards</h1>
+</div>
+<div id='cards' class='w3-container'>
+	<div id='box-one'><span style='color:white!important;'><div id='txt-one' data-content=''></div></span></div>
+	<div id='box-two'><span style='color:white!important;'><div id='txt-two' data-content=''></div></span></div>
+
+
+</div>
+<br>
+<div class='w3-container w3-center w3-small'>
+	<button class='w3-button w3-purple' onclick='flipLeft()'>Flip Left</button>
+	<button class='w3-button w3-green' onclick='flipRight()'>Flip Right</button>
+</div>
+<br>
+<div class='w3-container w3-center w3-small'>
+	<button class='w3-button w3-yellow' onclick='newSwear()'>Flip Both</button>
+	<button class='w3-button w3-red' onclick='window.location.reload ()'>Reload</button>
+	<h3><a href='/swear/swears.js'>Current list of swears</a></h3>
+</div>
+</body>
+</html>

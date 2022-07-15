@@ -19,16 +19,20 @@ $this_type = "website";
 
 
 	//Removed while manually scraping FB's OG info
-	include '/home/u545245070/public_html/libraries/facebook/debugger.php';
-	$fb = new FacebookDebugger();
-	$fb->reload($this_url);
+	//include '/home/u545245070/public_html/libraries/facebook/debugger.php';
+	//$fb = new FacebookDebugger();
+	//$fb->reload($this_url);
 
 
-include '/home/u545245070/public_html/templates/_head.php';
+//include '/home/u545245070/public_html/templates/_head.php';
+echo "<!DOCTYPE html><html>";
+echo "<head><title>" . $this_title . "</title>";
+echo '<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">';
+echo "</head>";
 
 echo "<body class='w3-dark-grey'>";
 
-include '/home/u545245070/public_html/templates/_navbar.php';
+//include '/home/u545245070/public_html/templates/_navbar.php';
 
 echo "<main id='main'>
 
@@ -145,7 +149,7 @@ div#txt-two:after {
 	}
 }
 </style>
-<script type='text/javascript' src='../data/swears.js'></script>
+<script type='text/javascript' src='/swear/swears.js'></script>
 <!--/*window.location.assign(window.location.href + '?q=' + swear);*/-->
 
 <script type='text/javascript'>
@@ -247,8 +251,11 @@ div#txt-two:after {
 	<button class='w3-button w3-yellow' onclick='newSwear()'>Flip Both</button>
 	<button class='w3-button w3-red' onclick='window.location.reload ()'>Reload</button>
   <h3><a href='../data/swears.js'>Current list of swears</a></h3>
-</div>";
+</div>
+</body>
+</html>
+";
 
-include '/home/u545245070/public_html/templates/_bottom.php';
+//include '/home/u545245070/public_html/templates/_bottom.php';
 
 ?>

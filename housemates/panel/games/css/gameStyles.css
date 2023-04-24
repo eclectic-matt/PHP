@@ -1,0 +1,197 @@
+* {
+	box-sizing: border-box;
+}
+@-webkit-keyframes ticker {
+	0% {
+		-webkit-transform: translate3d(0, 0, 0);
+		transform: translate3d(0, 0, 0);
+		visibility: visible;
+   }
+	100% {
+		-webkit-transform: translate3d(-100%, 0, 0);
+		transform: translate3d(-100%, 0, 0);
+   }
+}
+@keyframes ticker {
+	0% {
+		-webkit-transform: translate3d(0, 0, 0);
+		transform: translate3d(0, 0, 0);
+		visibility: visible;
+   }
+	100% {
+		-webkit-transform: translate3d(-100%, 0, 0);
+		transform: translate3d(-100%, 0, 0);
+   }
+}
+
+.topTick {
+	top: 0;
+	background-color: rgb(197, 197, 197);
+	/* background-color: rgba(172, 37, 37, 0.9); */
+	color: black;
+}
+
+.btmTick {
+	bottom: 0;
+	background-color: rgb(197, 197, 197);
+	color: black;
+}
+
+/* 
+Ticker source from
+https://codepen.io/lewismcarey/pen/GJZVoG
+*/
+.tickerWrap {
+	position: fixed;
+	width: 100%;
+	overflow: hidden;
+	height: 2.5rem;
+	/* height: 8rem; */
+	padding-left: 100%;
+	box-sizing: content-box;
+}
+/*
+	NOTE: .tickerItem timings included inline in stats.php
+	Due to caching issues with TV
+*/
+.tickerWrap .tickerItem {
+	display: inline-block;
+	padding: 0 2rem;
+	/* padding: 0 2rem; */
+	/* font-size: 4rem; */
+	font-size: 26.25px;
+	/*color: white;*/
+}
+body {
+	margin-top: 0rem;
+	padding-bottom: 8rem;
+	margin-bottom: 0rem;
+	/* margin-top: 2rem;
+	padding-top: 8rem;
+	padding-bottom: 8rem;
+	margin-bottom: 2rem; */
+}
+
+#statsDiv{
+	padding-top: 8rem;
+}
+
+h1, h2, p {
+	padding: 0 5%;
+}
+
+
+table, tr, th, td{
+	border: 1px solid black;
+	border-collapse: collapse;
+	padding: 0.5px;
+	margin: 0;
+	line-height: 0.8;
+	color: black;
+}
+th{
+	font-size: 1em;
+	font-weight: bold;
+}
+
+td{
+	font-size: 1.2em;
+	font-weight: normal;
+}
+
+/*
+* { 
+	box-sizing: border-box; 
+}
+
+body {
+	padding: 0px 20px;
+}
+
+
+div h1 {
+    font-family: Arial;
+}
+
+.tickerWrap {
+	position: fixed;
+	top: 0;
+	width:100%;
+	overflow: hidden;
+	height: 4rem;
+	background-color: #c0c0c0;
+	padding-left: 100%;
+	box-sizing: content-box;
+}
+
+.ticker{
+	position: fixed;
+	top: 0;
+	width:100%;
+	overflow: hidden;
+	height: 4rem;
+	background-color: #c0c0c0;
+	padding-left: 100%;
+	box-sizing: content-box;
+
+	-webkit-animation-iteration-count: infinite; 
+            animation-iteration-count: infinite;
+    -webkit-animation-timing-function: linear;
+            animation-timing-function: linear;
+   -webkit-animation-name: ticker;
+           animation-name: ticker;
+    -webkit-animation-duration: 30s;
+            animation-duration: 30s;
+}
+
+.tickerItem{
+	position: fixed;
+	top: 0;
+	width:100%;
+	overflow: hidden;
+	height: 4rem;
+	background-color: #c0c0c0;
+	padding-left: 100%;
+	box-sizing: content-box;
+
+	display: inline-block;
+	padding: 0 2rem;
+	font-size: 2rem;
+	color: black;   
+}
+
+@-webkit-keyframes ticker {
+  0% {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    visibility: visible;
+  }
+
+  100% {
+    -webkit-transform: translate3d(-100%, 0, 0);
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+@keyframes ticker {
+  0% {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    visibility: visible;
+  }
+
+  100% {
+    -webkit-transform: translate3d(-100%, 0, 0);
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+*/
+
+/*table tr th:nth-child(2), table tr td:nth-child(2),table tr th:nth-child(3), table tr td:nth-child(3),table tr th:nth-child(4), table tr td:nth-child(4){
+	background-color: 'green';
+	color: 'black';
+}
+table tr th:nth-child(5), table tr td:nth-child(5),table tr th:nth-child(6), table tr td:nth-child(6),table tr th:nth-child(7), table tr td:nth-child(7),table tr th:nth-child(8), table tr td:nth-child(8){
+	background-color: 'blue';
+	color: 'white';
+}*/

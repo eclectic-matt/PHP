@@ -1,0 +1,497 @@
+<?php
+
+class Games {
+
+	//THE URL FOR BOARD GAME GEEK LOGGED PLAYS
+	private $playsUrl = 'https://api.geekdo.com/xmlapi2/plays?username=EclecticMatt';
+
+	//THE FILE WHERE PLAY BACKUPS ARE STORED
+	private $playsBackupFile = 'playsBackup.json';
+
+	//THE FILE WHERE GAME STATS SUMMARIES ARE STORED
+	private $summaryStatsFile = 'js/gameSummaries.json';
+	
+	//THE FILE WHERE THE BOARD GAME COLLECTION DATA ARE STORED
+	private $gameCollectionFile = 'js/board-games.json';
+
+	//THE PLAYERS TO TRACK FOR SUMMARY STATS
+	public $arrPlayers = array('Tom Walton', 'Matt', 'Naomi Lukianczuk', 'Rich Lee');
+
+	//HOW MANY SECONDS TO CACHE LOGGED PLAY DATA
+	public $staleSeconds = 60 * 60 * 3;
+
+	//TRACK THE LAST 15 PLAYS (TICKER)
+	public $lastPlaysCount = 15;
+
+	//TRACK THE LAST 10 WINS (TICKER)
+	public $lastWinsCount = 10;
+
+	//THE ARRAY OF ALL LOGGED PLAYS (OUTPUT AS TABLE)
+	public $arrayAllPlays = array();
+
+	//THE ARRAY OF SUMMARY STATS
+	public $summaryStats = array();
+
+	/**
+	 * Create an instance of the games class, grabbing logged plays data.
+	 */
+	public function __construct(){
+
+		//CHECK IF BGG DATA PULLED MORE THAN "STALE SECONDS" AGO
+		if ($this->checkStale($this->playsBackupFile, $this->staleSeconds) === true){
+
+			//GET FRESH DATA AND PARSE
+			$this->arrayAllPlays = $this->getFreshPlaysArray($this->playsUrl);
+			//ENCODE BACK INTO JSON
+			$allPlaysJSON = json_encode($this->arrayAllPlays);
+			//STORE - LOGGED PLAYS BACKUP FILE
+			file_put_contents($this->playsBackupFile, $allPlaysJSON);
+
+			//GENERATE NEW PLAYER SUMMARIES
+			$this->summaryStats = $this->getPlayerSummaries($this->arrayAllPlays, $this->arrPlayers);
+			//ENCODE BACK INTO JSON
+			$encoded = json_encode($this->summaryStats);
+			//STORE - SUMMARY STATS BACKUP FILE
+			file_put_contents($this->summaryStatsFile, $encoded);
+
+		}else{
+
+			//GET CACHED LOGGED PLAYS DATA
+			$this->arrayAllPlays = $this->getBackupJSON($this->playsBackupFile);
+			//GET CACHED SUMMARY STATS
+			$this->summaryStats = $this->getBackupJSON($this->summaryStatsFile);
+		}
+	}
+
+	private function getFreshPlaysArray($url){
+
+		//GET THE FIRST PAGE OF LOGGED PLAYS
+		$playsArray = $this->getXMLandReturnDecodedJSON($url, true);
+		//KNOW THE DEFAULT IS 100 RESULTS PER PAGE
+		$resultsPerPage = 100;
+		//THE TOTAL PLAYS IS AN ATTRIBUTE ON THE FIRST PAGE
+		$totalPlays = $playsArray['@attributes']['total'];
+		//CALCULATE THE TOTAL NUMBER OF PAGES
+		$resultsPages = ceil($totalPlays / $resultsPerPage);
+
+		//ITERATE THROUGH THE PAGES TO GRAB THE REMAINING DATA
+		for ($i = 1; $i < $resultsPages; $i++){
+
+			//APPEND THE PAGE NUMBER TO THE URL
+			$nextFileName = $url . '&page=' . ($i + 1);
+			//GET THE NEXT LOGGED PLAY PAGE
+			$nextArray = $this->getXMLandReturnDecodedJSON($nextFileName, true);
+			
+			//ITERATE THROUGH THE LOGGED PLAYS
+			foreach($nextArray['play'] as $play){
+
+				//APPEND TO THE PLAYS ARRAY
+				$playsArray['play'][] = $play;
+			}
+		}
+		//END TESTING
+		return $playsArray;
+	}
+
+	public function outputSummaryAsJSObject(){
+
+		/* GENERATE JS ARRAY TO PARSE */
+		$index = 0;
+		$lastPlayDate = date('Y-m-d',strtotime('-1 year'));
+		$lastPlayGame = '';
+		//$lastPlayWinner = '';
+		echo 'var players = {';
+		foreach ($this->summaryStats as $player => $summary){
+			if ($player === 'Matt'){
+				$player = 'Matt Tiernan';
+			}
+			echo '"' . $player . '": {';
+			echo '"Plays": ' . $summary['plays'] . ',';
+			echo '"Wins": ' . $summary['wins'] . ',';
+			echo '"Win Rate": "' . $summary['winRate'] . '%",';
+			echo '"Last Played Date": "' . strftime('%a, %e %b %G', strtotime($summary['lastPlay']['date'])) . '",';
+			echo '"Last Played Game": "' . $summary['lastPlay']['game'] . '",';
+			echo '"Last Played Score": "' . $summary['lastPlay']['score'] . '"';
+			echo '}';
+			//INCREMENT INDEX
+			$index++;
+			//CHECK IF THIS IS THE LAST PLAYED DATE
+			if ($lastPlayDate < $summary['lastPlay']['date']){
+				$lastPlayDate = $summary['lastPlay']['date'];
+				$lastPlayGame = $summary['lastPlay']['game'];
+			}
+			if ($index !== count($playersSummary)){
+				echo ',';
+			}
+		}
+		//CLOSE PLAYERS OBJECT
+		echo '};';
+		//OUTPUT LASTPLAY OBJECT
+		echo 'lastPlay = {"date": "' . $lastPlayDate . '", "game": "' . $lastPlayGame . '"};';//, "winner": "' . $lastPlayWinner . '"}';
+
+	}
+
+
+	public function getLastPlays($plays, $count){
+
+		$arrLast = array();
+		foreach ($plays['play'] as $play){
+			$title = $play['item']['@attributes']['name'];
+			if (!in_array($title, $arrLast)){
+				$arrLast[] = $title;
+				if (count($arrLast) >= $count) break;
+			}
+		}
+		return $arrLast;
+	
+	}
+
+	public function getLastWins($plays, $count){
+
+		$arrLast = array();
+		foreach ($plays['play'] as $play){
+			
+			//SKIP PLAY IF NO PLAYERS FOUND
+			if (!isset($play['players'])) continue;
+	
+			//GET THE PLAYERS FOR THIS LOGGED PLAY
+			$thisPlayers = $play['players']['player'];
+			
+			$singleWinner = false;
+			$winnerName = 'Nobody';
+			$winScore = '';
+	
+			//ITERATE THROUGH PLAYERS FOR THIS LOGGED PLAY
+			foreach($thisPlayers as $thisPlayer){
+	
+				if (!isset($thisPlayer['@attributes'])) continue;
+	
+				//CONVENIENCE VARIABLE
+				$playerName = $thisPlayer['@attributes']['name'];
+				
+				if ($thisPlayer['@attributes']['win'] === "1"){
+					
+					if ($singleWinner === false){
+						$singleWinner = true;
+						$winnerName = $playerName;
+						$winScore = $thisPlayer['@attributes']['score'];
+					}else{
+						//MORE THAN ONE WINNER
+						$singleWinner = null;
+						break;
+					}
+				}
+			}
+	
+			if ($singleWinner !== null){
+				//IF REACHED HERE, ONLY 1 WINNER
+				$win = new stdClass();
+				$win->game = $play['item']['@attributes']['name'];
+				$win->player = $winnerName;
+				$win->score = $winScore;
+				if (!in_array($win, $arrLast)){
+					$arrLast[] = $win;
+					if (count($arrLast) >= $count){
+						return $arrLast;
+					}
+				}
+			}
+		}
+		return $arrLast;
+	}
+
+	public function getPlayerSummaries($plays, $players){
+		
+		$summary = array();
+
+		foreach($players as $player){
+			$summary[$player] = [];
+			$summary[$player]['name'] = $player;
+			$summary[$player]['plays'] = 0;
+			$summary[$player]['wins'] = 0;
+			$summary[$player]['winRate'] = 0;
+			$summary[$player]['lastPlay'] = [];
+			$summary[$player]['lastPlay']['date'] = 0;
+			$summary[$player]['lastPlay']['game'] = 0;
+			$summary[$player]['lastPlay']['score'] = 0;
+			$summary[$player]['lastWin'] = [];
+			$summary[$player]['lastWin']['date'] = 0;
+			$summary[$player]['lastWin']['game'] = 0;
+			$summary[$player]['lastWin']['score'] = 0;
+		}
+
+		//var_dump($plays);
+
+		//ITERATE THROUGH LOGGED PLAYS (REVERSE CHRONO)
+		foreach($plays['play'] as $play){
+
+			//SKIP PLAY IF "Sooty Saves Sixpence"
+			if ($play['item']['@attributes']['name'] === 'Sooty Saves Sixpence') continue;
+			//echo 'PROCESSING PLAY FOR ' . $play['item']['@attributes']['name'] . '<br>';
+
+			//SKIP PLAY IF NO PLAYERS FOUND
+			if (!isset($play['players'])) continue;
+			
+			//GET THE PLAYERS FOR THIS LOGGED PLAY
+			$thisPlayers = $play['players']['player'];
+			//var_dump($thisPlayers);
+
+			//ITERATE THROUGH PLAYERS FOR THIS LOGGED PLAY
+			foreach($thisPlayers as $thisPlayer){
+
+				if (!isset($thisPlayer['@attributes'])) continue;
+
+				//CONVENIENCE VARIABLE
+				$playerName = $thisPlayer['@attributes']['name'];
+
+				//IF THE FOUND PLAYER IS IN THE PLAYERS ARRAY
+				if (in_array($playerName, $players)){
+
+					//INCREMENT THIS PLAYER'S PLAY COUNT
+					$summary[$playerName]['plays']++;
+
+					//IF THIS WAS A WIN FOR THE PLAYER
+					if ($thisPlayer['@attributes']['win'] === "1"){
+
+						$summary[$playerName]['wins']++;
+
+						//IF NO LAST WIN IS RECORDED
+						if ($summary[$playerName]['lastWin']['date'] === 0){
+
+							//STORE THIS PLAY AS THEIR LAST WIN
+							$summary[$playerName]['lastWin']['date'] = $play['@attributes']['date'];
+							$summary[$playerName]['lastWin']['game'] = $play['item']['@attributes']['name'];
+							$summary[$playerName]['lastWin']['score'] = (int)$thisPlayer['@attributes']['score'];
+						}
+						
+					}
+
+					//IF NO LAST PLAY IS RECORDED
+					if ($summary[$playerName]['lastPlay']['date'] === 0){
+
+						//STORE THIS PLAY AS THEIR LAST WIN
+						$summary[$playerName]['lastPlay']['date'] = $play['@attributes']['date'];
+						$summary[$playerName]['lastPlay']['game'] = $play['item']['@attributes']['name'];
+						$summary[$playerName]['lastPlay']['score'] = (int)$thisPlayer['@attributes']['score'];
+						
+					}				
+				}
+			}
+			//echo 'END PROCESSING<br>';
+			//echo '==================<br><br>';
+		}
+
+		foreach ($players as $playerName){
+			//
+			if ($summary[$playerName]['plays'] !== 0){
+				$summary[$playerName]['winRate'] = floor( ($summary[$playerName]['wins'] / $summary[$playerName]['plays']) * 100);
+			}
+		}
+
+		//RETURN FRESH SUMMARY STATS
+		return $summary;
+	}
+
+	/**
+	 * OUTPUT FUNCTIONS (PUBLIC)
+	 */
+
+	/**
+	 * Output the table showing all logged plays.
+	 * @param array $plays The logged plays array
+	 * 
+	 * @return void Outputs to screen.
+	 */
+	public function outputAllPlaysTable($plays){
+
+		echo '<table id="allPlaysTable" class="w3-table-all w3-center">';
+		echo '<tr>';
+		echo '<th onclick="sortTable(0, \'allPlaysTable\')">Name <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(1, \'allPlaysTable\')">Date <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(2, \'allPlaysTable\')">Players <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '</tr>';
+	
+		foreach ($plays['play'] as $play){
+	
+			if (!isset($play['players'])) continue;
+			if ($play['item']['@attributes']['name'] === 'Sooty Saves Sixpence') continue;
+	
+			$title = $play['item']['@attributes']['name'];
+			$date = $play['@attributes']['date'];
+			$players = array();
+			foreach ($play['players']['player'] as $player){
+				if (!isset($player['@attributes'])) continue;
+				if ($player['@attributes']['win'] === "1"){
+					$players[] = '<b>' . $player['@attributes']['name'] . '</b>';
+				}else{
+					$players[] = $player['@attributes']['name'];
+				}
+				
+			}
+			$playerStr = implode(', ', $players);
+			echo '<tr>';
+			echo '<td>' . $title . '</td>';
+			echo '<td>' . date('j F Y', strtotime($date)) . '</td>';
+			echo '<td>' . $playerStr . '</td>';
+			echo '</tr>';
+		}
+		echo '</table>';
+	}
+
+	/**
+	 * Output a table of the most recent plays and the score.
+	 * @param array $summary The summary stats array.
+	 * 
+	 * @return void Outputs to screen.
+	 */
+	public function outputRecentTable($summary){
+		echo '<table id="recentTable" class="w3-table-all w3-center">';
+		echo '<tr>';
+		echo '<th onclick="sortTable(0, \'recentTable\')">Name <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(1, \'recentTable\')">Total Plays <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(2, \'recentTable\')">Last Played Date <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(3, \'recentTable\')">Last Played Game <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(4, \'recentTable\')">Last Played Score <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '</tr>';
+		foreach($summary as $player){
+			echo '<tr>';
+			echo '<td>' . $player['name'] . '</td>';
+			echo '<td>' . $player['plays'] . '</td>';
+			//echo '<td>' . date('l jS F Y', strtotime($player['lastPlay']['date'])) . '</td>';
+			echo '<td>' . date('j F Y', strtotime($player['lastPlay']['date'])) . '</td>';
+			echo '<td>' . $player['lastPlay']['game'] . '</td>';
+			echo '<td>' . $player['lastPlay']['score'] . '</td>';
+			echo '</tr>';
+		}
+		echo '</table>';
+	}
+	
+	/**
+	 * Output a table of recent winners to the screen.
+	 * @param array $summary The summary stats array.
+	 * 
+	 * @return void Outputs to screen.
+	 */
+	public function outputWinnersTable($summary){
+		echo '<table id="winnersTable" class="w3-table-all w3-center">';
+		echo '<tr>';
+		echo '<th onclick="sortTable(0, \'winnersTable\')">Name <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(1, \'winnersTable\')">Win Count <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(2, \'winnersTable\')">Win Rate (%) <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(3, \'winnersTable\')">Last Win Date <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(4, \'winnersTable\')">Last Win Game <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '<th onclick="sortTable(5, \'winnersTable\')">Last Win Score <image class="w3-right" src="icons/sort-descending.png" width="10" height="10" /></th>';
+		echo '</tr>';
+		foreach($summary as $player){
+			echo '<tr>';
+			echo '<td>' . $player['name'] . '</td>';
+			echo '<td>' . $player['wins'] . '</td>';
+			echo '<td>' . $player['winRate'] . '</td>';
+			//echo '<td>' . date('l jS F Y', strtotime($player['lastWin']['date'])) . '</td>';
+			echo '<td>' . date('j F Y', strtotime($player['lastWin']['date'])) . '</td>';
+			echo '<td>' . $player['lastWin']['game'] . '</td>';
+			echo '<td>' . $player['lastWin']['score'] . '</td>';
+			echo '</tr>';
+		}
+		echo '</table>';
+	}
+
+	public function outputLastPlaysTicker($lastPlaysCount, $lastPlays){
+
+		echo '<div class="w3-grey tickerWrap topTick">';
+		echo '<div class="ticker">';
+		//TITLE
+		echo '<div class="tickerItem">';
+		echo 'LAST ' . $lastPlaysCount . ' GAMES ===>';
+		echo '</div>';
+		//SHOW RECENT PLAYED GAMES
+		foreach($lastPlays as $title){
+			echo '<div class="tickerItem">';
+			echo '';
+			echo $title;
+			echo ' ----- ';
+			echo '</div>';
+		}
+		echo '</div>';
+		echo '</div>';
+	}
+
+	public function outputLastWinsTicker($lastWinsCount, $lastWins){
+
+		echo '<div class="w3-grey tickerWrap btmTick">';
+		echo '<div class="ticker">';
+		//TITLE
+		echo '<div class="tickerItem">';
+		echo 'LAST ' . $lastWinsCount . ' WINNERS ===>';
+		echo '</div>';
+		//SHOW RECENT PLAYED GAMES
+		foreach($lastWins as $win){
+			echo '<div class="tickerItem">';
+			echo '<b>' . $win->player . '</b> won <em>' . $win->game . '</em>';
+			if ($win->score !== ''){
+				echo ' (score: ' . $win->score . ')';
+			}
+			echo ' ----- ';
+			echo '</div>';
+		}
+		echo '</div>';
+		echo '</div>';
+	}
+	
+
+
+	/**
+	 * UTILITY FUNCTIONS (PRIVATE)
+	 */
+
+	/**
+	 * Get an XML file from the filesystem and decode into JSON.
+	 * @param string $url The name of the XML file.
+	 * @param boolean $associative Whether to decode as an associative array (default: true).
+	 * 
+	 * @return The decoded JSON object/array.
+	 */
+	private function getXMLandReturnDecodedJSON($url, $associative = true){
+
+		$file = file_get_contents($url);
+		$xml = simplexml_load_string($file);
+		$encoded = json_encode($xml);
+		return json_decode($encoded, $associative);	
+	}
+
+	/**
+	 * Get a JSON file from the filesystem and decode.
+	 * @param string $file The name of the JSON file.
+	 * @param boolean $associative Whether to decode as an associative array (default: true).
+	 * 
+	 * @return The decoded JSON object/array.
+	 */
+	private function getBackupJSON($file, $associative = true){
+		
+		$encoded = file_get_contents($file);
+		return json_decode($encoded, $associative);
+	}
+	
+	/**
+	 * Check if the backup file is stale.
+	 * @param string $file The filename to check.
+	 * @param int $seconds The number of seconds to count as stale.
+	 * 
+	 * @return boolean True if stale, false if fresh.
+	 */
+	private function checkStale($file, $staleSeconds){
+		if (file_exists($file)){
+			$mTime = filemtime($file);
+		}else{
+			$mTime = 1;
+		}
+		$secondsSinceMod = time() - $mTime;
+		if ($secondsSinceMod > $staleSeconds){
+			return true;
+		}else{
+			return false;
+		}
+	
+	}
+
+}

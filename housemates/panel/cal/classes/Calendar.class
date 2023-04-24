@@ -1,0 +1,617 @@
+<?php
+
+require 'DatePlus.class';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/housemates/config/Config.class';
+
+/**
+ * Stores the calendar events and outputs in various formats.
+ */
+class Calendar 
+{
+	//THE EVENTS STORED AGAINST THIS CALENDAR
+	public $events = null;
+
+	//THE PATH TO THE iCAL FILE
+	public static $calPath = '';
+
+	//HOW MANY EVENTS TO DISPLAY (UPCOMING FORMAT)
+	public static $eventDisplayLimit = 10;
+
+	//WHETHER TO HIDE PAST EVENTS (UPCOMING AND WTV FORMAT)
+	public static $displayPastEvents = true;
+
+	public static $storePastEvents = false;
+
+
+	//COLOURS USED IN CALENDAR FUNCTIONS
+	public static $colourToday = 'w3-green';
+	public static $colourPast = 'w3-black';
+	public static $colourFuture = 'w3-grey';
+	public static $colourWTVToday = 'w3-green';
+	public static $colourWTVOther = 'w3-dark-grey';
+
+	/**
+	 * Constructor function - no params necessary
+	 */
+	public function __construct(){
+		$this->events = array();
+		$this->generate();
+
+		//GET DATA FROM CONFIG FILE
+		$config = new Config();
+
+		$this->calPath = $config::$data['calendar']['url'];
+	}
+
+
+	public function generate(){
+
+		$thisEvent = new Event();
+		$thisEvent->title = '';
+	
+		//OPEN HANDLE TO ICAL WEB LINK
+		$handle = fopen(self::$calPath, "r");
+	
+		//IF HANDLE IS ESTABLISHED
+		if ($handle) {
+	
+			//WHILE THERE IS STILL A LINE TO READ
+			while (($line = fgets($handle)) !== false) {
+	
+				//HACKY BOLLOCKS - WHY IS THIS THE REQUIRED STRUCTURE?
+				switch (true){
+	
+					//BEGIN EVENT
+					case strpos($line, 'BEGIN:VEVENT') !== false:
+						$thisEvent = new Event();
+						$thisEvent->title = '';
+					break;
+	
+					//DT START
+					case strpos($line, 'DTSTART') !== false:
+						//PASS TO STATIC FUNCTION WITH THE LINE AND WHETHER START OR END
+						$thisEvent->start = Event::processDateString($line, 'DTSTART');
+					break;
+	
+					//DT END
+					case strpos($line, 'DTEND') !== false:
+						//PASS TO STATIC FUNCTION WITH THE LINE AND WHETHER START OR END
+						$thisEvent->end = Event::processDateString($line, 'DTEND');
+					break;
+	
+					//SUMMARY
+					case strpos($line, 'SUMMARY') !== false:
+						//STRIP 'SUMMARY:' AND STORE THIS AS THE EVENT TITLE
+						$thisEvent->title = str_ireplace('SUMMARY:', '', $line);
+					break;
+	
+					//LOCATION
+					case strpos($line, 'LOCATION') !== false:
+						//STRIP 'LOCATION:' AND STORE THIS AS THE EVENT LOCATION
+						$thisEvent->location = trim(str_ireplace('LOCATION:', '', $line));
+					break;
+	
+					//END EVENT
+					case strpos($line, 'END:VEVENT') !== false:
+
+						//QUICK CHECK IN CASE EVENT NOT PARSED CORRECTLY
+						if ($thisEvent->title !== ''){
+
+							//CHECK WHETHER TO STORE THIS EVENT (ALWAYS LOOK BACK 7 DAYS FOR WEEK-TO-VIEW)
+							//$formatter = new IntlDateFormatter('en_UK', IntlDateFormatter::LONG, IntlDateFormatter::NONE);
+							//echo $formatter->format(time());
+
+							$dateSevenDaysAgo = date_create("-7 days")->format('Ymd');
+							//echo $dateSevenDaysAgo;
+							
+							//FORMAT A GM DATE
+							//gmdate();
+
+							//RETURN A DATE-TIME OBJECT
+							//date_create();
+
+							//RETURN THE CURRENT TIMESTAMP
+							//time();
+
+							/*if (
+								(strcmp($thisEvent->start->timestamp, strftime('%Y%m%d', strtotime('-7 days'))) <= 0)
+								&& (strcmp($thisEvent->end->timestamp, strftime('%Y%m%d', strtotime('-7 days'))) <= 0)
+								&& (self::$storePastEvents === false)
+							)*/
+							
+							if (
+								(strcmp($thisEvent->start->timestamp, $dateSevenDaysAgo) <= 0)
+								&& (strcmp($thisEvent->end->timestamp, $dateSevenDaysAgo) <= 0)
+								&& (self::$storePastEvents === false)
+							){
+								//DO NOT STORE THIS EVENT
+							}else{
+								//STORE THIS EVENT
+								$this->storeEvent($thisEvent);
+							}
+
+							//#-#-#-#-#-#-#
+							//REPEAT EVENTS
+							//#-#-#-#-#-#-#
+							if ($thisEvent->repeat->frequency !== false){
+
+								//CHECK IF EVENT HAS END DATE
+								if (isset($thisEvent->repeat->end)){
+
+									//CHECK IF END DATE HAS PASSED
+									/*if (strcmp($thisEvent->repeat->end, strftime('%Y%m%d', strtotime('+0 days'))) > 0){
+										break;
+									}*/
+									if (strcmp($thisEvent->repeat->end, date_create("now")->format('Ymd')) > 0){
+										break;
+									}
+								}
+
+								//EVENT END DATE HAS NOT PASSED
+								switch ($thisEvent->repeat->frequency){
+
+									case 'WEEKLY':
+
+										//CALCULATE WEEKS BETWEEN
+										$startStr = $thisEvent->start->year . '-' . $thisEvent->start->month . '-' . $thisEvent->start->day;
+										$endStr = $thisEvent->end->year . '-' . $thisEvent->end->month . '-' . $thisEvent->end->day;
+										$weeksBetween = DatePlus::getDurationBetween($startStr, 'now', 'weeks');
+										//IF NO WEEKS HAVE PASSED, EXIT
+										if ($weeksBetween === 0) break;
+
+										//HANDLE INTERVALS
+										if ($thisEvent->repeat->frequencyInterval !== false){
+
+											//CHECK IF INTERVAL MATCHES THIS WEEK
+											$intervalMod = ($weeksBetween % $thisEvent->repeat->frequencyInterval);
+
+											if ($intervalMod === 0){
+												//EVENT THIS WEEK
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $weeksBetween . 'W');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $weeksBetween . 'W');
+												$nextNextIntervalStartDate = false;
+												$nextNextIntervalEndDate = false;
+											}else{
+												//ADD EVENT LATER
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $weeksBetween . 'W');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $weeksBetween . 'W');
+												$nextNextIntervalStartDate = false;
+												$nextNextIntervalEndDate = false;
+											}
+
+										}else{
+											//NO INTERVAL - EVERY WEEK
+											$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $weeksBetween . 'W');
+											$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $weeksBetween . 'W');
+											//if ($weeksBetween > 1){
+												//ADD ONE NEXT WEEK AS WELL
+												$nextNextIntervalStartDate = DatePlus::getMatchingDate($startStr, 1 + $weeksBetween . 'W');
+												$nextNextIntervalEndDate = DatePlus::getMatchingDate($endStr, 1 + $weeksBetween . 'W');
+											//}else{
+											//	$nextNextIntervalStartDate = false;
+											//	$nextNextIntervalEndDate = false;
+											//}
+											
+										}
+
+										//CREATE THE DUPLICATE EVENT
+										$newEvent = DatePlus::createEvent($thisEvent, $nextIntervalStartDate, $nextIntervalEndDate);
+
+										if ($nextNextIntervalStartDate !== false){
+
+											//ADD THAT EVENT
+											$this->storeEvent($newEvent);
+											//THEN CREATE ANOTHER!
+											$newEvent = DatePlus::createEvent($thisEvent, $nextNextIntervalStartDate, $nextNextIntervalEndDate);
+										}
+
+										$storeAllowed = true;
+									break;
+									case 'MONTHLY':
+
+										//CALCULATE MONTHS BETWEEN
+										$startStr = $thisEvent->start->year . '-' . $thisEvent->start->month . '-' . $thisEvent->start->day;
+										$endStr = $thisEvent->end->year . '-' . $thisEvent->end->month . '-' . $thisEvent->end->day;
+										$monthsBetween = DatePlus::getDurationBetween($startStr, 'now', 'months');
+										//IF NO MONTHS HAVE PASSED, EXIT
+										if ($monthsBetween === 0) break;
+
+										//HANDLE INTERVALS
+										if ($thisEvent->repeat->frequencyInterval !== false){
+
+											//CHECK IF INTERVAL MATCHES THIS WEEK
+											$intervalMod = ($monthsBetween % $thisEvent->repeat->frequencyInterval);
+
+											if ($intervalMod === 0){
+												//EVENT THIS WEEK
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $monthsBetween . 'M');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $monthsBetween . 'M');
+											}else{
+												//ADD EVENT LATER
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $monthsBetween . 'M');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $monthsBetween . 'M');
+											}
+
+										}else{
+											//NO INTERVAL - EVERY MONTH
+											$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $monthsBetween . 'M');
+											$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $monthsBetween . 'M');
+										}
+
+										$newEvent = DatePlus::createEvent($thisEvent, $nextIntervalStartDate, $nextIntervalEndDate);
+										$storeAllowed = true;
+									break;
+									case 'YEARLY':
+
+										//CALCULATE YEARS BETWEEN
+										$startStr = $thisEvent->start->year . '-' . $thisEvent->start->month . '-' . $thisEvent->start->day;
+										$endStr = $thisEvent->end->year . '-' . $thisEvent->end->month . '-' . $thisEvent->end->day;
+										$yearsBetween = DatePlus::getDurationBetween($startStr, 'now', 'years');
+										//IF NO WEEKS HAVE PASSED, EXIT
+										if ($yearsBetween === 0) break;
+										//HANDLE INTERVALS
+										if ($thisEvent->repeat->frequencyInterval !== false){
+
+											//CHECK IF INTERVAL MATCHES THIS WEEK
+											$intervalMod = ($yearsBetween % $thisEvent->repeat->frequencyInterval);
+
+											if ($intervalMod === 0){
+												//EVENT THIS WEEK
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $yearsBetween . 'Y');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $yearsBetween . 'Y');
+											}else{
+												//ADD EVENT LATER
+												$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $yearsBetween . 'Y');
+												$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, ($thisEvent->repeat->frequencyInterval - $intervalMod) + $yearsBetween . 'Y');
+											}
+
+										}else{
+											//NO INTERVAL - EVERY YEAR
+											$nextIntervalStartDate = DatePlus::getMatchingDate($startStr, $yearsBetween . 'Y');
+											$nextIntervalEndDate = DatePlus::getMatchingDate($endStr, $yearsBetween . 'Y');
+										}
+
+										$newEvent = DatePlus::createEvent($thisEvent, $nextIntervalStartDate, $nextIntervalEndDate);
+										$storeAllowed = true;
+									break;
+									default:
+										$storeAllowed = false;
+									break;
+								}//end switch
+
+								if (isset($storeAllowed)){
+									if ($storeAllowed === true){
+										//STORE THE DUPLICATED EVENT
+										$this->storeEvent($newEvent);
+									}
+								}
+
+							}//end if !frequency*/
+						}else{
+							//RAISE AN ERROR - TRYING TO SAVE EVENT BEFORE PARSING
+							trigger_error('Trying to save an event that has not been parsed', E_USER_NOTICE);
+						}
+					break;
+					//WEEKLY ON A TUESDAY
+					//RRULE:FREQ=WEEKLY;WKST=TU
+
+					//FORTNIGHTLY ON A THURSDAY WITH AN END DATE (NOT MONDAY)
+					//RRULE:FREQ=WEEKLY;WKST=MO;UNTIL=20211028T000000Z;INTERVAL=2;BYDAY=TH
+
+					//MONTHLY ON THE 28TH
+					//RRULE:FREQ=MONTHLY;WKST=TU;BYMONTHDAY=28
+					case strpos($line, 'RRULE') !== false:
+
+						//WEEKLY;WKST=MO;UNTIL=20211028T000000Z;INTERVAL=2;BYDAY=TH
+						$freqStrip = str_ireplace('RRULE:FREQ=', '', $line);
+						$freq = substr($freqStrip, 0, strpos($freqStrip, ';'));
+
+						//MO;UNTIL=20211028T000000Z;INTERVAL=2;BYDAY=TH
+						$weekStartStrip = str_ireplace($freq . ';WKST=', '', $freqStrip);
+						if (strlen(trim($weekStartStrip)) === 2){
+							$weekStart = $weekStartStrip;
+						}else{
+							$weekStart = substr($weekStartStrip, 0, strpos($weekStartStrip, ';'));
+						}
+
+						$thisEvent->repeat->frequency = $freq;
+						$thisEvent->repeat->dayOfWeek = $weekStart;
+
+						$intervalKey = 'INTERVAL=';
+						$untilKey = 'UNTIL=';
+						$byDayKey = 'BYDAY=';
+						$byMonthDayKey = 'BYMONTHDAY=';
+
+						//RECURRING, NON-STANDARD PATTERN
+						if (strpos($line, $intervalKey) !== false){
+
+							$intervalStrip = substr($weekStartStrip,strpos($weekStartStrip,$intervalKey) + strlen($intervalKey),1);
+							$thisEvent->repeat->frequencyInterval = $intervalStrip;
+
+						}
+
+						//MONTHLY RECURRING
+						if (strpos($line, $byMonthDayKey) !== false){
+
+							$byMonthDayStrip = substr($weekStartStrip,strpos($weekStartStrip,$byMonthDayKey) + strlen($byMonthDayKey),2);
+							$thisEvent->repeat->dayOfMonth = $byMonthDayStrip;
+						}
+
+						/*MONTHLY RECURRING
+						if (strpos($line, $byMonthDayKey) !== false){
+
+							$byMonthDayStrip = substr($weekStartStrip,strpos($weekStartStrip,$byMonthDayKey) + strlen($byMonthDayKey),2);
+							$thisEvent->repeat->dayOfMonth = $byMonthDayStrip;
+						}*/
+						
+						
+						//SEPARATELY, CAPTURE END DATE
+						if (strpos($line, $untilKey) !== false){
+
+							$untilStrip = substr($weekStartStrip,strpos($weekStartStrip,$untilKey) + strlen($untilKey),16);
+							$thisEvent->repeat->ends = $untilStrip;
+						}
+
+						//var_dump($thisEvent);
+
+					break;
+				}//END SWITCH
+
+			}//END WHILE $line = fgets($handle) !== false
+	
+			//CLOSE THE HANDLE ONCE COMPLETE
+			fclose($handle);
+
+		} else {
+	
+			//ERROR OPENING THE FILE
+			trigger_error('There was an error loading the calendar - stopping now', E_USER_ERROR);
+
+		}//END if ($handle)
+
+	}//END $this->generate()
+	
+
+	/**
+	 * Store an event into the calendar in the correct position (chronological)
+	 * @param stdClass $newEvent The event to add to the calendar
+	 * 
+	 * @return void No output.
+	 */
+	public function storeEvent($newEvent){
+		//IF ADDING THE FIRST EVENT
+		if (count($this->events) === 0){
+			//STORE IN THE FIRST POSITION OF THE EVENTS ARRAY
+			$this->events[0] = $newEvent;
+			return;
+		}
+		//ELSE, SET THE INDEX TO 0
+		$index = 0;
+		//LOOP THROUGH ALL EVENTS IN THE CALENDAR
+		foreach($this->events as $event){
+			//COMPARE THE STRING TIMESTAMPS TO SEE IF EVENT BEFORE CURRENT EVENT
+			if (strcmp($event->start->timestamp, $newEvent->start->timestamp) >= 0){
+				//IF SO, SPLICE INTO EVENTS ARRAY AT THIS INDEX
+				array_splice( $this->events, $index, 0, array($newEvent));
+				//BREAK OUT OF THE LOOP
+				break;
+			}
+			//INCREMENT THE INDEX
+			$index++;
+			//IF WE HAVE REACHED THE END OF THE EVENTS ARRAY
+			if ($index === count($this->events)){
+				//PUSH THIS EVENT ONTO THE END OF THE ARRAY
+				array_push($this->events, $newEvent);
+			}
+		}
+	}//END storeEvent
+
+	public function outputUpcoming(){
+
+		//var_dump($this->events);
+
+		$count = 1;
+		$today = date('Y-m-d');
+		foreach ($this->events as $event){
+			if ($count > self::$eventDisplayLimit) return;
+
+			$eventStartDay = date('Y-m-d', mktime(0, 0, 0, $event->start->month, $event->start->day, $event->start->year));
+			//$eventEndDay = date('Y-m-d', mktime(0, 0, 0, $event->end->month, $event->end->day, $event->end->year));
+
+			if ( ($eventStartDay < $today) && (self::$displayPastEvents)) continue;
+			//echo generateEventBox($event);
+			echo self::generateSplitEventBox($event, $count);
+			$count++;
+		}
+	}
+
+	public static function generateSplitEventBox($event, $eventId){
+		
+		//GET TODAY AND THE EVENT START DAY
+		$today = date('Y-m-d');
+		$eventStartDay = date('Y-m-d', mktime(0, 0, 0, $event->start->month, $event->start->day, $event->start->year));
+		$eventEndDay = date('Y-m-d', mktime(0, 0, 0, $event->end->month, $event->end->day, $event->end->year));
+
+		//COLOUR BASED ON DATE
+		if ($eventStartDay === $today){
+			$classColor = self::$colourToday;
+		}else if ($eventStartDay < $today){
+			$classColor = self::$colourPast;
+		}else{
+			$classColor = self::$colourFuture;
+		}
+
+		//PREPARE THE EVENT BOX STRING
+		$eventBoxStr = '';
+		$eventBoxStr .= '<div id="event' . $eventId . '" class="eventBox ' . $classColor . ' w3-row">';
+
+		//IF SEPARATE START/END DAYS
+		if ($eventStartDay !== $eventEndDay){
+
+			// 8title-2start-2end
+
+			//EVENT TITLE
+			$eventBoxStr .= '<div class="w3-col s8">';
+				$eventBoxStr .= '<h3>' . $event->title; $eventBoxStr .= '</h3>';
+				//IF THIS EVENT REPEATS, ADD IN BRACKETS
+				if ($event->repeat->frequency !== false){
+					$eventBoxStr .= '<em>(repeats ' . $event->repeat->frequency . ' on a ' . trim($event->repeat->dayOfWeek) . ')</em>';
+				}
+				
+			$eventBoxStr .= '</div>';
+		
+			//START INFO
+			$eventBoxStr .= '<div class="w3-col s2 w3-center">';
+			$eventBoxStr .= '<p><b>';
+			$eventBoxStr .= date('d-m-Y', strtotime($eventStartDay));
+			if ($event->start->hour !== 0){
+				$eventBoxStr .= '</b> (' . str_pad($event->start->hour,2,"0") . ':' . str_pad($event->start->min,2,"0");
+			}
+
+			if ($event->start->hour !== 0){
+				$eventBoxStr .= ')';
+			}
+			$eventBoxStr .= '</p>';
+			$eventBoxStr .= '</div>';
+
+			//END INFO
+			$eventBoxStr .= '<div class="w3-col s2 w3-center">';
+			$eventBoxStr .= '<p><b>';
+			$eventBoxStr .= date('d-m-Y', strtotime($eventEndDay));
+			if ($event->end->hour !== 0){
+				$eventBoxStr .= '</b> (' . str_pad($event->end->hour,2,"0") . ':' . str_pad($event->end->min,2,"0") . ')';
+			}
+		}else{
+
+			//9title-3start
+
+			//TITLE
+			$eventBoxStr .= '<div class="w3-col s9">';
+				$eventBoxStr .= '<h3>' . $event->title; $eventBoxStr .= '</h3>';
+				//IF THIS EVENT REPEATS, ADD IN BRACKETS
+				if ($event->repeat->frequency !== false){
+					$eventBoxStr .= '<em>(repeats ' . $event->repeat->frequency . ' on a ' . trim($event->repeat->dayOfWeek) . ')</em>';
+				}
+				
+			$eventBoxStr .= '</div>';
+		
+			//START/END TIME
+			$eventBoxStr .= '<div class="w3-col s3 w3-center">';
+			$eventBoxStr .= '<p><b>';
+			$eventBoxStr .= date('d-m-Y', strtotime($eventStartDay));
+			if ($event->start->hour !== 0){
+				$eventBoxStr .= '</b> (' . str_pad($event->start->hour,2,"0") . ':' . str_pad($event->start->min,2,"0");
+			}
+			$eventBoxStr .= ' - ' . str_pad($event->end->hour,2,"0") . ':' . str_pad($event->end->min,2,"0");
+			if ($event->end->hour !== 0){
+				$eventBoxStr .= ')';
+			}
+		}
+		
+		$eventBoxStr .= '</b></p>';
+
+		$eventBoxStr .= '</div>'; //w3-col
+		$eventBoxStr .= '</div>'; //w3-row
+		return $eventBoxStr;
+	}
+
+	public function outputWeekToView(){
+	
+		$includeHeader = false;
+
+		if (date('l') === 'Monday'){
+			$currentDay = new DateTime(date('Y-m-d', strtotime('today')));
+		}else{
+			$currentDay = new DateTime(date('Y-m-d', strtotime('last monday')));
+		}
+	
+		echo '<table>';
+		if ($includeHeader === true){
+			echo '<tr class="w3-dark-grey">';
+			echo '<th style="width: 15%">Day</th>';
+			echo '<th style="width: 85%">Events</th>';
+			echo '</tr>';
+		}
+		
+		for ($count = 0; $count < 7; $count++){
+			echo '<tr>';
+			$classColour = self::$colourWTVOther;
+			if (date('Y-m-d') === $currentDay->format('Y-m-d')){
+				$classColour = self::$colourWTVToday;
+			}
+			echo '<td  style="width: 15%" class="' . $classColour . '">';   
+			echo $currentDay->format('D jS');
+			echo '</td>';
+			$eventStr = '';
+			foreach($this->events as $event){
+
+				$eventStartDay = date('Y-m-d', mktime(0, 0, 0, $event->start->month, $event->start->day, $event->start->year));
+				//REDUCE THE END DAY BY 1 IF END HOUR = 0 (MIDNIGHT ON THE DAY)
+				if ($event->end->hour === 0){
+					$eventEndDay = date('Y-m-d', mktime(0, 0, 0, $event->end->month, $event->end->day - 1, $event->end->year));
+				}else{
+					$eventEndDay = date('Y-m-d', mktime(0, 0, 0, $event->end->month, $event->end->day, $event->end->year));
+				}
+				
+		
+				//EXCLUDE PAST EVENTS
+				if (
+					( 
+						($eventStartDay < $currentDay->format('Y-m-d')) 
+						&& ($eventEndDay < $currentDay->format('Y-m-d'))
+					) 
+					&& (self::$displayPastEvents)
+				) continue;
+				
+				if ( 
+					($eventStartDay <= $currentDay->format('Y-m-d')) 
+					&& ($eventEndDay >= $currentDay->format('Y-m-d')) 
+					//&& ($event->end->hour !== 0)
+				){
+					//IF EVENT STARTS TODAY
+					if ($eventStartDay === $currentDay->format('Y-m-d')){
+
+						//OUTPUT THE TITLE
+						$eventStr === '' ? $eventStr = trim($event->title) : $eventStr .= ', ' . trim($event->title);
+						//IF HOUR SET
+						if ($event->start->hour != '0'){
+							//INCLUDE THE TIME
+							$eventStr .= ' <span class="w3-small">(' . $event->start->hour . ':' . $event->start->min;
+						}
+						//IF THE EVENT *ALSO* ENDS TODAY
+						if ($eventEndDay === $currentDay->format('Y-m-d')){
+							$eventStr .= ' - ' . $event->end->hour . ':' . $event->end->min . ')</span>';
+						}else{
+							$eventStr .= ')</span>';
+						}
+
+					//ELSE IF EVENT ENDS TODAY
+					}else if ($eventEndDay === $currentDay->format('Y-m-d')){
+
+						if ($event->end->hour === 0){
+							//SKIP - SHOULD HAVE ENDED YESTERDAY
+						}else{
+							$eventStr === '' ? $eventStr = trim($event->title) : $eventStr .= ', ' . trim($event->title);
+							$eventStr .= ' <span class="w3-small">(til ' . $event->end->hour . ':' . $event->end->min . ')</span>';
+						}
+
+					//ELSE, EVENT JUST CONTINUES TODAY
+					}else{
+						//$eventStr === '' ? $eventStr = trim($event->title) : $eventStr .= ', ' . trim($event->title);
+						$eventStr === '' ? $eventStr = '<em class="w3-small">' . trim($event->title) . '</em>' : $eventStr .= ', <em class="w3-small">' . trim($event->title) . '</em>';
+					}
+					
+					
+				}
+			}
+			echo '<td  style="width: 85%" class="' . $classColour . '">';
+			echo $eventStr;
+			echo '</td>';
+			echo '</tr>';
+			$currentDay->add(new DateInterval('P1D'));
+		}
+		echo '</table>';
+	
+	}
+	
+} //END Calendar.class

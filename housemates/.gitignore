@@ -1,0 +1,9 @@
+/config
+/test
+/archive
+/panel/photo/images/*
+/panel/todo/listBackups/*
+/panel/todo/newMSapi.php
+*.ini
+*/defineCal.php
+/panel/photo/grab.php

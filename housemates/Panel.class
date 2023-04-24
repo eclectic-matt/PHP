@@ -1,0 +1,75 @@
+<?php
+
+class Panel 
+{
+
+	//THE SHORT PATH TO THE PANEL
+	public $path = '';
+	//THE TITLE OF THE PANEL (USED IN LINKS)
+	public $title = '';
+	//THE w3-class FOR COLOURING
+	public $class = '';
+	//THE TITLE OF A SUBTASK (IF PRESENT) e.g. Add Todo + Complete Todo
+	public $subTaskTitle = null;
+	//THE PATH OF A SUBTASK (IF PRESENT) e.g. todo/add.php + todo/complete.php
+	public $subTaskPath = null;
+
+	public static $base = '192.168.2.137:8080/housemates/';
+
+	public static $qrCodeSizePanel = 75;
+
+	public function __construct($title, $path, $class, $subTaskTitle=null, $subTaskPath=null){
+		$this->title = $title;
+		$this->path = $path;
+		$this->class = $class;
+		$this->subTaskTitle = $subTaskTitle;
+		$this->subTaskPath = $subTaskPath;
+	}
+
+	public function getEscapedPath(){
+		$escPath = htmlspecialchars(self::base . $this->path);
+		return $escPath;
+	}
+
+	public function outputTVViewHeading(){
+		$strOutput = '<div class="w3-row w3-hide-small w3-hide-medium ' . $this->class . '">';
+		$strOutput .= 	'<div class="w3-col s10">';
+		$strOutput .= 		'<a href="' . $this->path . '"><button class="w3-button ' . $this->class . ' w3-block">' . $this->title . '</button></a>';
+		$strOutput .= 	'</div>';
+		$strOutput .= 	'<div class="w3-col s2">';
+		$strOutput .= 		'<img style="float:right;" src="https://chart.googleapis.com/chart?chs=' . self::qrCodeSizePanel . 'x' . self::qrCodeSizePanel . '&cht=qr&choe=UTF-8&chl=' . $this->path . '"/>';
+		$strOutput .= 	'</div>';
+		$strOutput .= '</div>';
+		return $strOutput;
+	}
+
+	public function outputPhoneViewHeading(){
+		$strOutput = '<div class="w3-row w3-hide-large ' . $this->class . '">';
+		if ($this->subTaskTitle !== null){
+			//SPLIT HEADER TO SHOW SUBTASK LINK
+			$strOutput .= 	'<div class="w3-col s6">';
+			$strOutput .= 		'<a href="' . $this->path . '"><button class="w3-button w3=xxlarge ' . $this->class . ' w3-block">' . $this->title . '</button></a>';
+			$strOutput .= 	'</div>';
+			$strOutput .= 	'<div class="w3-col s6">';
+			$strOutput .= 		'<a href="' . $this->subTaskPath . '"><button class="w3-button w3=xxlarge ' . $this->class . ' w3-block">' . $this->subTaskTitle . '</button></a>';
+			$strOutput .= 	'</div>';
+			$strOutput .= '</div>';
+		}else{
+			//NO SUBTASK
+			$strOutput .= 	'<div class="w3-col s12">';
+			$strOutput .= 		'<a href="' . $this->path . '"><button class="w3-button w3=xxlarge ' . $this->class . ' w3-block">' . $this->title . '</button></a>';
+			$strOutput .= 	'</div>';
+		}
+		$strOutput .= '</div>';
+		
+		return $strOutput;
+	}
+
+	public function outputIframe(){
+		$strOutput = '<iframe id="' . $this->title . 'iframe" scrolling="no" ';
+		$strOutput .= 'src="' . $this->path . '" ';
+		$strOutput .= 'width="100" height="' . self::iframeHeight . '">';
+		$strOutput .= '</iframe>';
+		return $strOutput;
+	}
+}

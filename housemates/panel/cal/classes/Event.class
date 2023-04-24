@@ -1,0 +1,149 @@
+<?php
+
+const FREQ_DAILY = 1;
+const FREQ_WEEKLY = 2;
+const FREQ_MONTHLY = 3;
+
+/**
+ * Generates an event with parsed day/time/repeat information
+ */
+class Event 
+{
+	//ALL EVENTS WILL HAVE A TITLE
+	public $title = '';
+	//NOT ALL EVENTS HAVE A LOCATION
+	public $location = null;
+
+	//THESE ARE stdClass OBJECTS WITH PROPERTIES
+	public $start;
+	public $end;
+	public $repeat;
+	
+	public function __construct(){
+
+		$this->start = new stdClass();
+		$this->start->day = 0;
+		$this->start->month = 0;
+		$this->start->year = 0;
+		$this->start->hour = 0;
+		$this->start->minute = 0;
+		$this->start->seconds = 0;
+
+		$this->end = new stdClass();
+		$this->end->day = 0;
+		$this->end->month = 0;
+		$this->end->year = 0;
+		$this->end->hour = 0;
+		$this->end->minute = 0;
+		$this->end->seconds = 0;
+
+		$this->repeat = new stdClass();
+		//frequency = DAILY, WEEKLY, MONTHLY, YEARLY (FREQ=)
+		$this->repeat->frequency = false;
+		//frequencyInterval = 1, 2, 3 ...  (INTERVAL=)
+		$this->repeat->frequencyInterval = false;
+		//dayOfWeek = false OR MO, TU, WE, TH, FR, SA, SU (WKST= or if INTERVAL then BYDAY=)
+		$this->repeat->dayOfWeek = false;
+		//dayOfMonth = false OR 1 - 31 (BYMONTHDAY=)
+		$this->repeat->dayOfMonth = false;
+		//ends = the end date, or false (UNTIL=)
+		$this->repeat->ends = false;
+	}
+
+	/**
+	 * Turns a date time string into a stdClass object based on format
+	 * @param $line The line to process (e.g. DTSTART;VALUE=DATE:20210630).
+	 * @param $startEndStr The string to strip from the date time strings (e.g. DTSTART).
+	 * 
+	 * @return stdClass The parsed date time object.
+	 */
+	public static function processDateString($line, $startEndStr){
+
+		//CHECK WHAT DATE FORMAT USED
+		if (strpos($line, ';VALUE=DATE:') !== false){
+
+			//FORMAT: DTSTART;VALUE=DATE:20210630
+			$dateTimeString = str_ireplace($startEndStr . ';VALUE=DATE:','',$line);
+			$thisDateTime = Event::processShortDate($dateTimeString);
+		}else if (strpos($line, ';TZID=Europe/London:') !== false){
+
+			//DTSTART;TZID=Europe/London:20210615T140000
+			$dateTimeString = str_ireplace($startEndStr . ';TZID=Europe/London:','',$line);
+			$thisDateTime = Event::processLongDate($dateTimeString);
+		}else{
+
+			//FORMAT: DTSTART:20210617T180000Z
+			$dateTimeString = str_ireplace($startEndStr . ':','',$line);
+			$thisDateTime = Event::processLongDate($dateTimeString);
+		}
+		return $thisDateTime;
+	}
+
+	/**
+	 * Processes a short date (20210724) to extract year/month/day
+	 * @param string $timeStr The string short date to process
+	 * 
+	 * @return stdClass $dateInfo The parsed date information
+	 */
+	public static function processShortDate($timeStr){
+		//$timeStr = strftime('%Y%m%d', strtotime($timeStr));
+		$fullDate = date_create($timeStr);
+		$timeStr = $fullDate->format('Ymd');
+		$dateInfo = new stdClass();
+		$dateInfo->year = substr($timeStr,0,4);
+		$dateInfo->month = substr($timeStr,4,2);
+		$dateInfo->day = substr($timeStr,6,2);
+		$dateInfo->hour = 0;
+		$dateInfo->min = 0;
+		$dateInfo->timestamp = $timeStr;
+		$dateInfo->hasTime = false;
+		return $dateInfo;
+	}
+
+
+	/**
+	 * Processes a long date (20210707T190000Z) to extract year/month/day/hour/min/second
+	 * @param string $timeStr The string long date to process
+	 * 
+	 * @return stdClass $dateInfo The parsed date information
+	 */
+	public static function processLongDate($timeStr){
+		$fullDate = date_create($timeStr);
+		$timeStr = $fullDate->format('Ymd') . 'T' . $fullDate->format('His') . 'S00Z';
+		//$timeStr = strftime('%Y%m%dT%H%M%S00Z', strtotime($timeStr));
+		$dateInfo = new stdClass();
+		$dateInfo->year = substr($timeStr,0,4);
+		$dateInfo->month = substr($timeStr,4,2);
+		$dateInfo->day = substr($timeStr,6,2);
+		$dateInfo->hour = substr($timeStr,9,2);
+		$dateInfo->min = substr($timeStr,11,2);
+		if (
+			($dateInfo->hour === 0)
+			&& ($dateInfo->min === 0)
+		){
+			$dateInfo->hasTime = false;
+		}
+		$dateInfo->timestamp = $timeStr;
+		return $dateInfo;
+	}
+
+	/**
+	 * Generate a formatted date/time string based on an event object
+	 * @param object $event The event to format a DT string for
+	 * 
+	 * @return string The formatted DT string
+	 */
+	public static function generateEventString($newEvent){
+		$formatStr = 'l jS \of F Y';
+		if ( ($newEvent->hour !== 0) && ($newEvent->min !== 0) ){
+			$formatStr = $formatStr . ' h:i A';
+		}else if ($newEvent->hour !== 0){
+			$formatStr =  $formatStr . ' h A';
+		}
+		$eventStr = date($formatStr, mktime($newEvent->hour, $newEvent->min, 0, $newEvent->month, $newEvent->day,  $newEvent->year));
+		return $eventStr;
+	}
+
+
+
+} //END Event.class

@@ -1,0 +1,353 @@
+<?php
+
+class TodoList {
+
+	//STORE THE JSON HERE
+	private $todoJson = '';
+
+	//THE TASKS STORED IN THIS TODO
+	public $tasks = array();
+
+	//THE NAMES OF TASK LISTS
+	public $listNames = array();
+
+	//THE LIST NAME FOR TASKS WITHOUT A SPECIFIED LIST
+	public static $defaultListName = 'Generic';
+
+	//THE POSSIBLE STATUSES
+	public static $statuses = array(
+		'waiting',
+		'completed'
+	);
+
+	public static $priority = array(
+		'low',
+		'medium',
+		'urgent'
+	);
+
+	public static $priorityClasses = array(
+		'w3-grey',
+		'w3-white',
+		'w3-red'
+	);
+
+	public static $taskCreators = array(
+		'Matt T',
+		'Naomi L',
+		'Rich L',
+		'Tom W',
+		'Other'
+	);
+
+	public static $todoFileName = '../todo/todo.json';
+
+	public function __construct(){
+
+		//GET THE FILE
+		$todoFile = file_get_contents(self::$todoFileName);
+		//DECODE THE JSON AND STORE
+		$this->todoJson = json_decode($todoFile);
+		//STORE THE TASK LIST
+		$this->tasks = $this->getTasks(false, true);
+	}
+
+	/**
+	 * Get all the tasks which match the urgency
+	 * @param boolean $urgency The urgency of task to get (default: false)
+	 * @param boolean $includeCompleted Whether to return completed tasks (default: false)
+	 * 
+	 * @return array The array of matching tasks
+	 */
+	function getTasks($urgency = false, $includeCompleted = false){
+
+		$arrReturn = new stdClass();
+		$arrReturn->list = array();
+		foreach ($this->todoJson->list as $item){
+
+			//RETURN COMPLETED TASKS?
+			if ($includeCompleted === false){
+				//ONLY GET "INCOMPLETE" TASKS - STATUSES[0]
+				if ($item->status !== self::$statuses[0]) continue;
+			}			
+
+
+			if ($urgency === false){
+
+				$arrReturn->list[] = $item;
+			//ONLY RETURN TASKS WHICH MATCH THE REQUESTED URGENCY
+			}else if (intval($item->urgency) === intval($urgency)){
+
+				$arrReturn->list[] = $item;
+			}
+		}
+		return $arrReturn;
+	}
+
+	/**
+	 * Create an array of task lists (split by their list name)
+	 * 
+	 * @return array The array of tasks split by list name
+	 */
+	function groupItemsByList(){
+		$lists = array();
+		$tasksList = $this->todoJson->list;
+		foreach($tasksList as $item){
+			if (isset($item->list)){
+				$thisList = $item->list;
+			}else{
+				$thisList = self::$defaultListName;
+			}
+			
+			if (!isset($lists[$thisList])){
+				$lists[$thisList] = array();
+			}
+			$lists[$thisList][] = $item;
+		}
+		return $lists;
+	}
+
+	/**
+	 * Output the task list grouped by their list
+	 * 
+	 * @return void Outputs to screen.
+	 */
+	function outputItemsByList($outputCompleted = false, $hideOutstanding = false){
+		
+		$lists = $this->groupItemsByList();
+		$colours = array('w3-pale-blue', 'w3-pale-yellow', 'w3-pale-green', 'w3-pale-red', 'w3-light-green', 'w3-light-blue');
+		
+		foreach ($lists as $currentList){
+
+			$listTitle = array_keys($lists, $currentList)[0];
+			$remaining = $this->getListCount($listTitle,$outputCompleted);
+			if ($remaining === 0){
+				continue;
+			}
+			if(count($colours) === 0){
+				$colours = array('w3-pale-blue', 'w3-pale-yellow', 'w3-pale-green', 'w3-pale-red', 'w3-light-green', 'w3-light-blue');
+			}
+			$thisColourIndex = rand(0, count($colours) - 1);
+			$listColour = $colours[$thisColourIndex];
+			array_splice($colours, $thisColourIndex, 1, null);
+			/*echo 'Colours before: ' . implode(', ', $colours);
+			echo 'List colour: ' . $listColour . '<br>';
+			echo 'Colours before: ' . implode(', ', $colours);*/
+			echo '<h2 class="w3-center">' . $listTitle . ' List (' . $remaining . ' items)</h2>';
+			
+			foreach ($currentList as $item){
+
+				//IF SET TO NOT OUTPUT COMPLETED
+				if ($outputCompleted === false){
+					//IF THE TASK STATUS IS "COMPLETED"
+					if ($item->status === self::$statuses[1]){
+						//SKIP THIS RECORD
+						continue;
+					}
+				}
+
+				if ($hideOutstanding === true){
+					if ($item->status === self::$statuses[0]){
+						//SKIP THIS RECORD
+						continue;
+					}
+				}
+
+				echo '<div id="item' . $item->id . '" class="todoItem w3-row ' . $listColour . '">';
+					//NEW - SHOW LIST TITLE IN RESULTS
+					echo '<span class="todoListNameSpan">' . $listTitle . '</span>';
+					echo '<div class="w3-col s2">';
+						echo '<img class="contrast" src="icons/list.png" width="50" height="50" />';
+					echo '</div>';
+					echo '<div class="w3-col s10"><h2 class="' . $item->status . 'Item">';
+						echo $item->title . '</h2>';
+					echo '</div>';
+				echo '</div>';
+			}
+		}
+	}
+
+	public function getListCount($list, $includeCompleted = false){
+		$lists = groupItemsByList($this->todoJson);
+		$thisList = $lists[$list];
+		$count = 0;
+		foreach ($thisList as $item){
+
+			if ($item->status === self::$statuses[1]){
+				if ($includeCompleted === false){
+					continue;
+				}
+			}
+			$count++;
+		}
+		return $count;
+	}
+
+	public function getListNames(){
+		$lists = $this->groupItemsByList();
+		return array_keys($lists);
+	}
+
+	public function saveNewTask($input){
+
+		$todo = new stdClass();
+		$todo->id = count($this->todoJson->list);
+		$todo->title = htmlspecialchars($input['title']);
+		if ($input['listName'] === 'New List Title (enter below)'){
+			if ($input['list'] === ''){
+				$todo->list = 'Generic';	
+			}else{
+				$todo->list = htmlspecialchars($input['list']);
+			}
+		}else{
+			$todo->list = htmlspecialchars($input['listName']);
+		}
+		$todo->addedBy = htmlspecialchars($input['addedBy']);
+		$todo->addedDate = date('Y-m-d H:i:s', time());
+		$todo->urgency = htmlspecialchars($input['urgency']);
+		$todo->status = 'waiting';
+		if (isset($input['subtasks'])){
+			$todo->subtasks = array();
+			$index = 1;
+			foreach ($input['subtasks'] as $task){
+				$newTask = new stdClass();
+				$newTask->id = 	$todo->id . '.' . $index;
+				$newTask->title = htmlspecialchars($task['title']);
+				$newTask->status = 'waiting';
+				$todo->addedBy = htmlspecialchars($input['addedBy']);
+				$newTask->addedDate = date('Y-m-d H:i:s', time());
+				$todo->subtasks[] = $newTask;
+				$index++;
+			}
+		}
+		
+		//ADD THIS TODO TO THE CLASS todoJson
+		$this->todoJson->list[] = $todo;
+		//ENCODE todoJson
+		$encodedJson = json_encode($this->todoJson);
+		//BACKUP BEFORE CHANGES FOR SAFETY
+		$this->createTodoListBackup();
+		//SAVE INTO FILE
+		file_put_contents(self::$todoFileName, $encodedJson);
+	}
+
+	public function markItemsAsCompleted($input){
+
+		foreach($input as $checked => $status){
+
+			if (strpos($checked, '_') !== false){
+				//DEALING WITH SUBTASK
+				$checkId = str_ireplace('check', '', $checked);
+				$mainId = substr($checkId,0,strpos($checked, '_'));
+				$subtaskId = str_ireplace('_', '.', $checkId);
+				//$subId = substr($checkId,strpos($checked, '.'));
+				foreach ($this->todoJson->list as $item){
+
+					if (intval($item->id) === intval($mainId)){
+
+						foreach ($item->subtasks as $task){
+
+							if ($task->id == $subtaskId){
+
+								$task->status = 'completed';
+								$task->completedDate = date('Y-m-d H:i:s', time());
+								echo '<em>Subtask "' . $task->title . '" marked as completed!</em><br>';
+							}
+						}
+					}
+				}
+
+			}else{
+
+				$checkId = str_ireplace('check', '', $checked);
+				foreach ($this->todoJson->list as $item){
+
+					if (intval($item->id) === intval($checkId)){
+
+						$item->status = 'completed';
+						$item->completedDate = date('Y-m-d H:i:s', time());
+						echo '<em>Task "' . $item->title . '" marked as completed!</em><br>';
+					}
+				}
+			}
+		}
+
+		echo '<br><br>';
+		echo '</div>';
+
+		//BACKUP BEFORE CHANGING todo.json
+		$this->createTodoListBackup();
+
+		//ENCODE TO SAVE
+		$encodedJson = json_encode($this->todoJson);
+
+		//SAVE BACK INTO THE JSON FILE
+		file_put_contents(self::$todoFileName, $encodedJson);
+	}
+
+	public function createTodoListBackup(){
+		//CREATE BACKUP OF ORIGINAL JSON
+		$currentList = file_get_contents(self::$todoFileName);
+		//GENERATE A NEW FILE NAME
+		$newFileName = '../todo/listBackups/todo_' . date('Ymd_His') . '.json';
+		//SAVE BACKUP
+		file_put_contents($newFileName,$currentList);
+	}
+
+
+	public function outputItemsForMarkingCompletion(){
+		
+		$todoJson = $this->todoJson;
+
+		foreach ($todoJson->list as $item){
+
+			if ($item->status !== "waiting") continue;
+	
+			switch ($item->urgency){
+				case 0:
+					//LOW
+					echo '<div class="w3-container ' . self::$priorityClasses[0] . '">';
+					echo '<span class="todoListNameSpan">' . $item->list . '</span>';
+					echo '<h2>';
+					echo '<input name="check' . $item->id . '" type="checkbox" class="w3-check"></input>&nbsp;&nbsp;&nbsp;';
+					echo '<img src="icons/rate.png" width="25" height="25" />&nbsp;&nbsp;&nbsp;';
+				break;
+				case 2:
+					//HIGH
+					echo '<div class="w3-container ' . self::$priorityClasses[2] . '">';
+					echo '<span class="todoListNameSpan">' . $item->list . '</span>';
+					echo '<h2>';
+					echo '<input name="check' . $item->id . '" type="checkbox" class="w3-check"></input>&nbsp;&nbsp;&nbsp;';
+					echo '<img src="icons/warn.png" width="25" height="25" />&nbsp;&nbsp;&nbsp;';
+				break;
+				case 1:
+				default:
+					//MEDIUM
+					echo '<div class="w3-container ' . self::$priorityClasses[1] . '">';
+					echo '<span class="todoListNameSpan">' . $item->list . '</span>';
+					echo '<h2>';
+					echo '<input name="check' . $item->id . '" type="checkbox" class="w3-check"></input>&nbsp;&nbsp;&nbsp;';
+					echo '<img src="icons/list.png" width="25" height="25" />&nbsp;&nbsp;&nbsp;';
+				break;
+			}
+			
+			echo $item->title . '</h2>';
+			if (isset($item->subtasks)){
+				foreach ($item->subtasks as $task){
+					if ($task->status !== "completed"){
+						echo '<div class="w3-container w3-padding-16">';
+						echo '<input name="check' . $task->id . '" type="checkbox" class="w3-check"></input>&nbsp;&nbsp;&nbsp;';
+						echo $task->title . '</div>';
+					}
+				}
+			}
+			echo '</div>';
+	
+		}
+	
+	}
+
+
+
+
+}

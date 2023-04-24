@@ -1,0 +1,76 @@
+<?php
+
+class DatePlus {
+
+	public static function getMatchingDate($startStr, $duration){
+		$original = new DateTime($startStr);
+		$interval = new DateInterval('P' . $duration);
+		$matching = $original->add($interval);
+		return $matching;
+	}
+
+	public static function getDurationBetween($strStart, $strEnd, $duration = 'days'){
+
+		$original = new DateTime($strStart);
+		$today = new DateTime($strEnd);
+		$daysBetween = $original->diff($today)->format('%r%a');
+		$yearsBetween = $today->format('Y') - $original->format('Y');
+		$monthsBetween = $today->format('m') - $original->format('m');
+		if ($monthsBetween < 0){
+			$monthsBetween = 12 - $monthsBetween;
+		}
+		$monthsBetween += 12 * $yearsBetween;
+
+		switch ($duration){
+			case 'weeks':
+				return floor($daysBetween / 7);
+			break;
+			case 'months':
+				//return $original->diff($today)->format('%r%m');
+				return $monthsBetween;
+			break;
+			case 'years':
+				//return $original->diff($today)->format('%r%y');
+				return $yearsBetween;
+			break;
+			case 'days':
+			default:
+				return $daysBetween;
+			break;
+		}
+	}
+
+	public static function createEvent($origEvent, $dateStart, $dateEnd){
+		//CREATE NEW EVENT
+		$newEvent = new stdClass();
+		//COPY PROPERTIES OVER
+		$newEvent->title = $origEvent->title;
+		$newEvent->location = $origEvent->location;
+		$newEvent->start = new stdClass();
+		$newEvent->start->hour = $origEvent->start->hour;
+		$newEvent->start->min = $origEvent->start->min;
+		$newEvent->start->seconds = 0;
+		$newEvent->end = new stdClass();
+		$newEvent->end->hour = $origEvent->end->hour;
+		$newEvent->end->min = $origEvent->end->min;
+		$newEvent->end->seconds = 0;
+		$newEvent->repeat = new stdClass();
+		$newEvent->repeat->frequency = $origEvent->repeat->frequency;
+		$newEvent->repeat->frequencyInterval = $origEvent->repeat->frequencyInterval;
+		$newEvent->repeat->dayOfWeek = $origEvent->repeat->dayOfWeek;
+		$newEvent->repeat->dayOfMonth = $origEvent->repeat->dayOfMonth;
+		$newEvent->repeat->ends = $origEvent->repeat->ends;
+		//GENERATE NEW PROPERTIES
+		$newEvent->start->year = $dateStart->format('Y');
+		$newEvent->start->month = $dateStart->format('m');
+		$newEvent->start->day = $dateStart->format('d');
+		//$newEvent->start->timestamp = strftime('%Y%m%d', strtotime($newEvent->start->year . '-' . $newEvent->start->month . '-' . $newEvent->start->day));
+		$newEvent->start->timestamp = date_create($newEvent->start->year . '-' . $newEvent->start->month . '-' . $newEvent->start->day)->format('Ymd');
+		$newEvent->end->year = $dateEnd->format('Y');
+		$newEvent->end->month = $dateEnd->format('m');
+		$newEvent->end->day = $dateEnd->format('d');
+		//$newEvent->end->timestamp = strftime('%Y%m%d', strtotime($newEvent->end->year . '-' . $newEvent->end->month . '-' . $newEvent->end->day));
+		$newEvent->start->timestamp = date_create($newEvent->end->year . '-' . $newEvent->end->month . '-' . $newEvent->end->day)->format('Ymd');
+		return $newEvent;
+	}
+}

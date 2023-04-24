@@ -1,0 +1,72 @@
+h1{
+	font-size: 1em;
+	padding: 5px;
+	line-height: 0.5;
+}
+
+h2{
+	font-size: 30px;
+	padding: 5px;
+	line-height: 0.85;
+}
+
+#navBox {
+	/*display: none;*/
+}
+.todoListNameSpan{
+	left: 40px;
+	padding-top: -20px;
+	padding-left: 5px;
+	padding-right: 5px;
+	background-color: black;
+	color: white;
+	border: 1px solid red;
+	font-style: italic;
+	position: absolute;
+}
+img {
+	margin-top: 20px !important;
+	margin-left: 10px !important;
+}
+
+.waitingItem{
+	font-size: 1.75em;
+}
+
+.completedItem{
+	font-size: 1.65em;
+	text-decoration: line-through;
+	color: red;
+}
+.completedTitle {
+	text-decoration: line-through;
+	font-weight: bold;
+	font-style: italic;
+}
+div.todoItem {
+	padding: 5px 25px;
+	margin: 10px;
+}
+div.todoItem h2 {
+	font-weight: bold;
+
+}
+div.todoItem img {
+	padding: 10px;
+	vertical-align: middle;
+}
+div.todoSubItem::before {
+	content: '|->';
+}
+
+
+/*Filter styles*/
+.saturate { filter: saturate(3); }
+.grayscale { filter: grayscale(100%); }
+.contrast { filter: contrast(160%); }
+.brightness { filter: brightness(0.25); }
+.blur { filter: blur(3px); }
+.invert { filter: invert(100%); }
+.sepia { filter: sepia(100%); }
+.huerotate { filter: hue-rotate(180deg); }
+.rss.opacity { filter: opacity(50%); }

@@ -1,0 +1,98 @@
+<?php
+namespace EclecticMatt\ai\classes;
+
+require($_SERVER['DOCUMENT_ROOT'] . '/ai/config.class');
+//use EclecticMatt\ai as Config;
+
+class EdenAI {
+
+	private $apiKey = null;
+	private $prompt = null;
+	private $url = null;
+	private $teamsUri = null;
+
+	public $baseUrl = 'https://api.edenai.run/v2';
+	public $pathImage = '/image/generation';
+	public $providers = array('openai', 'stabilityai');
+	public $resolution = '512x512';
+
+	public $lastImageData = null;
+
+	public function __construct(){
+
+		$this->url = $this->baseUrl . $this->pathImage;
+		$this->apiKey = \EclecticMatt\ai\Config::getValue('edenai.api.key');
+		$this->teamsUri = \EclecticMatt\ai\Config::getValue('teams.webhook.url');
+	}
+
+	public function getImage($prompt, $type=null){
+
+		if(is_null($prompt)){
+			throw new \Exception('Must supply a prompt string!');
+		}
+
+		//SET PROMPT
+		$this->prompt = $prompt;
+
+		//SET UP CURL
+		$ch = curl_init();
+		$options = array(
+			CURLOPT_URL => $this->url,
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_ENCODING => "",
+			CURLOPT_MAXREDIRS => 10,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+			CURLOPT_CUSTOMREQUEST => "POST",
+			CURLOPT_POSTFIELDS => json_encode([
+				'response_as_dict' => true,
+				'attributes_as_list' => false,
+				'show_original_response' => false,
+				'resolution' => $this->resolution,
+				'num_images' => 1,
+				'providers' => $this->providers[0],
+				'text' => $this->prompt
+			]),
+			CURLOPT_HTTPHEADER => [
+				"accept: application/json",
+				"authorization: Bearer " . $this->apiKey,
+				"content-type: application/json"
+			]
+		);
+		curl_setopt_array($ch, $options);
+		$response = curl_exec($ch);
+		curl_close($ch);
+
+		//PROCESS RESPONSE
+		$jsonResponse = json_decode($response);
+
+		switch($type){
+			case 'url':
+				$returnVal = $jsonResponse->{$this->providers[0]}->items[0]->image_resource_url;
+			break;
+			case 'base64':
+				$returnVal = $jsonResponse->{$this->providers[0]}->items[0]->image;
+			break;
+			default:
+				$returnVal = $jsonResponse->{$this->providers[0]}->items[0];
+			break;
+		}
+		
+		//LOG TO CSV 
+		$logFile = $_SERVER['DOCUMENT_ROOT'] . '/ai/log.csv';
+		$fp = fopen($logFile, 'a');
+		if(!is_string($returnVal)){
+			$currentLog = array(date('Y-m-d H:i:s'), $this->prompt, $type, $returnVal->image_resource_url);
+			$this->lastImageData = $returnVal->image_resource_url;
+		}else{
+			$currentLog = array(date('Y-m-d H:i:s'), $this->prompt, $type, $returnVal);
+			$this->lastImageData = $returnVal;
+		}
+		fputcsv($fp, $currentLog);
+
+		
+		return $returnVal;
+	}
+}
+
+?>

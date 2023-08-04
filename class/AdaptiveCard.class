@@ -1,0 +1,139 @@
+<?php
+namespace EclecticMatt\ai\classes;
+
+require_once($_SERVER['DOCUMENT_ROOT'] . '/ai/config.class');
+//use EclecticMatt\ai as Config;
+
+class AdaptiveCard {
+
+	public $schema = 'http://adaptivecards.io/schemas/adaptive-card.json';
+	public $version = '1.4';
+	public $type = 'AdaptiveCard';
+	public $body = null;
+	public $content = null;
+
+	/**
+	 * Creates a new AdaptiveCard element for populating.
+	 */
+	public function __construct(){
+
+		//BUILD THE CONTENT OBJECT (CONVERT TO JSON AT THE END)
+		$this->content = new \stdClass();
+		$this->content->{'$schema'} = $this->schema;
+		$this->content->type = $this->type;
+		$this->content->version = $this->version;
+		$this->content->msTeams = new \stdClass();
+		$this->content->msTeams->width = 'full';
+		$this->content->body = [];
+
+		//var_dump($this->content);
+	}
+
+	/**
+	 * Adds an element to the body array.
+	 */
+	public function appendBody($element){
+		$this->content->body[] = $element;
+	}
+
+	/**
+	 * 
+	 */
+	public function createContainer($items=null){
+		$container = new \stdClass();
+		$container->type = 'Container';
+		//IF ITEMS SUPPLIED
+		if(!is_null($items)){
+			//STORE IN CONTAINER
+			$container->items = $items;
+		}else{
+			//ELSE INIT ITEMS ARRAY
+			$container->items = array();
+		}
+		//var_dump($container);
+		return $container;
+	}
+
+	public function addItemToContainer(&$container, $item){
+		$container->items[] = $item;
+		//var_dump($container);
+	}
+
+	public function addActionToContainer(&$container, $actionUrl, $actionTitle){
+		$container->selectAction = new \stdClass();
+		$container->selectAction->type = 'Action.OpenUrl';
+		$container->selectAction->url = $actionUrl;
+		$container->selectAction->title = $actionTitle;
+	}
+
+	public function createTextBlock($text, $size, $weight='bolder'){
+
+		$textBlockSizes = array(
+			'default',
+			'small',
+			'medium',
+			'large',
+			'extraLarge'
+		);
+
+		if(!in_array($size, $textBlockSizes)){
+			$size = 'default';
+		}
+
+		$textBlock = new \stdClass();
+		$textBlock->type = 'TextBlock';
+		$textBlock->size = $size;
+		$textBlock->weight = $weight;
+		$textBlock->text = $text;
+		//CUSTOMISATION - TO UPDATE VIA INPUT
+		$textBlock->color = 'default';
+		$textBlock->fontType = 'default';
+		$textBlock->horizontalAlignment = 'center';
+		$textBlock->isSubtle = false;
+		$textBlock->maxLines = null;
+		//size
+		//weight
+		$textBlock->wrap = true;
+		$textBlock->style = 'default';
+		$textBlock->separator = false;
+
+		return $textBlock;
+	}
+
+	public function createImage($imageUrl, $altText=''){
+
+		$image = new \stdClass();
+		$image->type = 'Image';
+		$image->url = $imageUrl;
+		$image->altText = $altText;
+
+		return $image;
+	}
+
+
+	public function createAction($url, $title){
+
+		$action = new \stdClass();
+		$action->type = 'Action.OpenUrl';
+		$action->url = $url;
+		$action->title = $title;
+		return $action;
+	}
+
+	public function output(){
+		$message = new \stdClass();
+		$message->type = 'message';
+		$message->attachments = array();
+
+		$attachment = new \stdClass();
+		$attachment->contentType = 'application/vnd.microsoft.card.adaptive';
+		$attachment->contentUrl = null;
+		$attachment->content = $this->content;
+
+		$message->attachments[] = $attachment;
+		
+		return json_encode($message, JSON_UNESCAPED_SLASHES );
+	}
+}
+
+?>
